@@ -140,7 +140,7 @@ class DailyForecast(BaseModel):
 
 
 class ForecastData(BaseModel):
-    """Forecast container with list of daily forecasts."""
+    """Container for forecast days."""
 
     forecastday: list[DailyForecast]
 
@@ -148,8 +148,8 @@ class ForecastData(BaseModel):
 class WeatherResponse(BaseModel):
     """Top-level response from weatherapi.com.
     
-    Contains location information and either current conditions,
-    forecast data, or both depending on the endpoint called.
+    Contains location info and either current conditions (for current.json)
+    or both current and forecast data (for forecast.json).
     """
 
     location: Location
