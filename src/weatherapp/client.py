@@ -82,77 +82,65 @@ class WeatherClient:
 
         # Handle bad requests (e.g., city not found)
         if response.status_code == 400:
-            api_message = "Bad request"
+            api_message = ""
             try:
-                error_data = response.json()
-                if "error" in error_data and "message" in error_data["error"]:
-                    api_message = error_data["error"]["message"]
+                error_body = response.json()
+                if "error" in error_body and "message" in error_body["error"]:
+                    api_message = error_body["error"]["message"]
             except Exception:
                 pass
+            
+            message = "Bad request to the weather service."
+            if api_message:
+                message = f"Bad request: {api_message}"
+            
             raise WeatherError(
-                f"Invalid request: {api_message}",
-                hint="Check the city name spelling or try a more specific location (e.g., 'Paris, FR').",
+                message,
+                hint='Check the city name spelling or try a more specific location (e.g., "Paris, FR").',
             )
 
         # Handle other HTTP errors
         if not response.ok:
             raise WeatherError(
                 f"Weather service returned an error (HTTP {response.status_code}).",
-                hint="Try again later or check the weatherapi.com service status.",
+                hint="The service may be experiencing issues. Try again later.",
             )
 
         try:
             return response.json()
-        except requests.JSONDecodeError as exc:
+        except ValueError as exc:
             raise WeatherError(
-                "Received invalid data from weather service.",
-                hint="Try again in a few moments.",
+                "Received invalid JSON from the weather service.",
+                hint="The service may be experiencing issues. Try again later.",
             ) from exc
 
     def get_current(self, city: str) -> WeatherResponse:
         """Fetch current weather conditions for a city.
 
         Args:
-            city: The city name or location query
+            city: The city name or location query (e.g., "London", "Paris, FR")
 
         Returns:
             A WeatherResponse with current conditions populated
 
         Raises:
-            WeatherError: If the request fails or the response is invalid
+            WeatherError: If the request fails or the city is not found
         """
         data = self._request("current.json", {"q": city, "aqi": "no"})
-        try:
-            return WeatherResponse(**data)
-        except Exception as exc:
-            raise WeatherError(
-                "Failed to parse weather data from the service.",
-                hint="The service may have returned unexpected data. Try again later.",
-            ) from exc
+        return WeatherResponse(**data)
 
     def get_forecast(self, city: str, days: int = 5) -> WeatherResponse:
-        """Fetch weather forecast for a city.
+        """Fetch multi-day weather forecast for a city.
 
         Args:
             city: The city name or location query
-            days: Number of forecast days (1-7)
+            days: Number of forecast days to retrieve (1-10, typically 1-7 for free tier)
 
         Returns:
             A WeatherResponse with forecast data populated
 
         Raises:
-            WeatherError: If the request fails or the response is invalid
+            WeatherError: If the request fails or the city is not found
         """
-        if not 1 <= days <= 7:
-            raise WeatherError(
-                f"Invalid number of forecast days: {days}",
-                hint="Forecast days must be between 1 and 7.",
-            )
-        data = self._request("forecast.json", {"q": city, "days": days, "aqi": "no", "alerts": "no"})
-        try:
-            return WeatherResponse(**data)
-        except Exception as exc:
-            raise WeatherError(
-                "Failed to parse forecast data from the service.",
-                hint="The service may have returned unexpected data. Try again later.",
-            ) from exc
+        data = self._request("forecast.json", {"q": city, "days": days, "aqi": "no"})
+        return WeatherResponse(**data)
