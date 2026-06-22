@@ -1,0 +1,21 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "weatherapp"
+version = "0.1.0"
+description = "Command-line weather application powered by weatherapi.com"
+requires-python = ">=3.11"
+dependencies = [
+    "requests",
+    "click",
+    "python-dotenv",
+    "rich",
+]
+
+[project.scripts]
+weatherapp = "weatherapp.cli:weather"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/weatherapp"]
