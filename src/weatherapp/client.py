@@ -90,27 +90,29 @@ class WeatherClient:
             except Exception:
                 pass
             
-            message = "Bad request to the weather service."
             if api_message:
-                message = f"Bad request: {api_message}"
-            
-            raise WeatherError(
-                message,
-                hint="Check the city name spelling or try a more specific location (e.g., 'Paris, FR').",
-            )
+                raise WeatherError(
+                    f"Invalid request: {api_message}",
+                    hint="Check the city name spelling and try again (e.g., 'Paris, FR').",
+                )
+            else:
+                raise WeatherError(
+                    "City not found or invalid request parameters.",
+                    hint="Check the city name spelling and try again (e.g., 'Paris, FR').",
+                )
 
         # Handle other HTTP errors
         if not response.ok:
             raise WeatherError(
-                f"Weather service returned status {response.status_code}.",
-                hint="The service may be temporarily unavailable. Try again later.",
+                f"Weather API returned error status {response.status_code}.",
+                hint="The weather service may be temporarily unavailable. Try again later.",
             )
 
         try:
             return response.json()
-        except ValueError as exc:
+        except Exception as exc:
             raise WeatherError(
-                "Received invalid JSON from the weather service.",
+                "Failed to parse response from weather service.",
                 hint="The service may be experiencing issues. Try again later.",
             ) from exc
 
@@ -118,10 +120,10 @@ class WeatherClient:
         """Fetch current weather conditions for a city.
 
         Args:
-            city: The city name (e.g., 'London', 'New York', 'Tokyo')
+            city: The city name to query
 
         Returns:
-            A WeatherResponse with current conditions
+            A WeatherResponse containing current conditions
 
         Raises:
             WeatherError: If the request fails or the city is not found
@@ -133,17 +135,19 @@ class WeatherClient:
         """Fetch weather forecast for a city.
 
         Args:
-            city: The city name (e.g., 'London', 'New York', 'Tokyo')
-            days: Number of days to forecast (1-7)
+            city: The city name to query
+            days: Number of forecast days (1-7)
 
         Returns:
-            A WeatherResponse with forecast data
+            A WeatherResponse containing forecast data
 
         Raises:
             WeatherError: If the request fails or the city is not found
         """
-        data = self._request(
-            "forecast.json",
-            {"q": city, "days": days, "aqi": "no", "alerts": "no"},
-        )
+        if not 1 <= days <= 7:
+            raise WeatherError(
+                f"Invalid forecast days: {days}. Must be between 1 and 7.",
+                hint="Use --days with a value from 1 to 7.",
+            )
+        data = self._request("forecast.json", {"q": city, "days": days, "aqi": "no"})
         return WeatherResponse(**data)
