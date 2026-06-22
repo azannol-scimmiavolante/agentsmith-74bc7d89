@@ -10,32 +10,51 @@ jobs:
           python-version: "3.12"
       - name: Install dependencies
         run: pip install pyinstaller pillow && pip install -e . || pip install requests python-dotenv pydantic rich
-      - name: Find GUI entry point
+      - name: Find entry point
         id: entry
         run: |
           EP=$(find src -name "gui.py" | head -1)
-          if [ -z "$EP" ]; then EP=$(find src -name "main.py" | head -1); fi
           if [ -z "$EP" ]; then EP=$(find src -name "app.py" | head -1); fi
+          if [ -z "$EP" ]; then EP=$(find src -name "__main__.py" | head -1); fi
+          if [ -z "$EP" ]; then
+            SCRIPT=$(grep -A1 "\[project.scripts\]" pyproject.toml | tail -1 | cut -d= -f2 | tr -d " \"")
+            MODULE=$(echo "$SCRIPT" | cut -d: -f1 | tr "." "/")
+            EP=$(find src -path "*${MODULE}.py" | head -1)
+          fi
+          if [ -z "$EP" ]; then EP=$(find src -name "*.py" | grep -v __pycache__ | head -1); fi
           echo "entry=$EP" >> $GITHUB_OUTPUT
-          NAME=$(basename $(dirname $EP))
-          echo "name=$NAME" >> $GITHUB_OUTPUT
-      - name: Build .app with PyInstaller
+          APPNAME=$(grep "^name" pyproject.toml | head -1 | cut -d= -f2 | tr -d " \"")
+          if [ -z "$APPNAME" ]; then APPNAME=$(basename $(pwd)); fi
+          echo "name=$APPNAME" >> $GITHUB_OUTPUT
+          echo "Found entry: $EP, name: $APPNAME"
+      - name: Build with PyInstaller
         run: |
-          pyinstaller --onefile --windowed \
+          pyinstaller --onefile --console \
             --name "${{ steps.entry.outputs.name }}" \
             "${{ steps.entry.outputs.entry }}"
       - name: Create DMG
         run: |
           brew install create-dmg
-          APP=$(find dist -name "*.app" | head -1)
-          APPNAME=$(basename "$APP" .app)
+          APPNAME="${{ steps.entry.outputs.name }}"
+          mkdir -p "dist/${APPNAME}.app/Contents/MacOS"
+          cp "dist/${APPNAME}" "dist/${APPNAME}.app/Contents/MacOS/${APPNAME}"
+          cat > "dist/${APPNAME}.app/Contents/Info.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>CFBundleExecutable</key><string>${APPNAME}</string>
+            <key>CFBundleIdentifier</key><string>com.agentsmith.${APPNAME}</string>
+            <key>CFBundleName</key><string>${APPNAME}</string>
+            <key>CFBundleVersion</key><string>1.0</string>
+          </dict></plist>
+          PLIST
           create-dmg \
-            --volname "$APPNAME" \
+            --volname "${APPNAME}" \
             --window-size 600 400 \
             --icon-size 100 \
             --app-drop-link 450 185 \
             "${APPNAME}.dmg" \
-            "$APP"
+            "dist/${APPNAME}.app"
       - name: Upload DMG as release asset
         uses: softprops/action-gh-release@v2
         with:
