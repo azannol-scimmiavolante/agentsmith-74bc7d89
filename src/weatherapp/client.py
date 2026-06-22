@@ -90,27 +90,29 @@ class WeatherClient:
             except Exception:
                 pass
             
-            message = "Bad request to the weather service."
             if api_message:
-                message = f"Bad request: {api_message}"
-            
-            raise WeatherError(
-                message,
-                hint='Check the city name spelling or try a more specific location (e.g., "Paris, FR").',
-            )
+                raise WeatherError(
+                    f"Bad request: {api_message}",
+                    hint='Check the city spelling or try a more specific name (e.g., "Paris, FR").',
+                )
+            else:
+                raise WeatherError(
+                    "City not found or invalid request.",
+                    hint='Check the city spelling or try a more specific name (e.g., "Paris, FR").',
+                )
 
-        # Handle other HTTP errors
+        # Handle other error status codes
         if not response.ok:
             raise WeatherError(
-                f"Weather service returned an error (HTTP {response.status_code}).",
-                hint="The service may be experiencing issues. Try again later.",
+                f"Weather API returned status {response.status_code}.",
+                hint="Try again in a few moments or check the weatherapi.com status.",
             )
 
         try:
             return response.json()
         except ValueError as exc:
             raise WeatherError(
-                "Received invalid JSON from the weather service.",
+                "Failed to parse weather API response.",
                 hint="The service may be experiencing issues. Try again later.",
             ) from exc
 
@@ -118,10 +120,10 @@ class WeatherClient:
         """Fetch current weather conditions for a city.
 
         Args:
-            city: The city name or location query (e.g., "London", "Paris, FR")
+            city: City name or location query (e.g., 'London' or 'Paris, FR')
 
         Returns:
-            A WeatherResponse with current conditions populated
+            A WeatherResponse containing current conditions
 
         Raises:
             WeatherError: If the request fails or the city is not found
@@ -130,14 +132,14 @@ class WeatherClient:
         return WeatherResponse(**data)
 
     def get_forecast(self, city: str, days: int = 5) -> WeatherResponse:
-        """Fetch multi-day weather forecast for a city.
+        """Fetch a multi-day forecast for a city.
 
         Args:
-            city: The city name or location query
-            days: Number of forecast days to retrieve (1-10, typically 1-7 for free tier)
+            city: City name or location query (e.g., 'London' or 'Paris, FR')
+            days: Number of forecast days (1-7)
 
         Returns:
-            A WeatherResponse with forecast data populated
+            A WeatherResponse containing forecast data
 
         Raises:
             WeatherError: If the request fails or the city is not found
