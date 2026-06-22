@@ -93,32 +93,28 @@ def format_forecast(response: WeatherResponse) -> None:
     if not response.forecast or not response.forecast.forecastday:
         raise ValueError("WeatherResponse has no forecast data to format")
 
-    # Print title panel
+    # Print location title
     title_text = Text()
-    title_text.append("Forecast \u2014 ", style="bold yellow")
-    title_text.append(_location_title(response), style="bold yellow")
+    title_text.append("Forecast for ", style="bold yellow")
+    title_text.append(_location_title(response), style="bold cyan")
     console.print()
-    console.print(Panel(title_text, border_style="blue", expand=False))
+    console.print(title_text)
     console.print()
 
-    # Iterate through each forecast day
     for day_forecast in response.forecast.forecastday:
         day = day_forecast.day
         date_str = day_forecast.date
-        
-        # Build daily summary table
+        condition_text = day.condition.text if day.condition else ""
+        condition_icon = day.condition.icon if day.condition else ""
+
+        # Create daily summary table
         daily_table = Table(show_header=False, box=None, pad_edge=False, expand=False)
         daily_table.add_column("Field", style="bold cyan", no_wrap=True)
         daily_table.add_column("Value", style="white")
 
-        # Condition
-        condition_text = day.condition.text if day.condition else ""
-        condition_icon = day.condition.icon if day.condition else ""
         daily_table.add_row("Condition", condition_text)
         if condition_icon:
             daily_table.add_row("Icon", condition_icon)
-
-        # Temperature range
         daily_table.add_row(
             "High",
             f"{day.maxtemp_c:.1f} \u00b0C / {day.maxtemp_f:.1f} \u00b0F",
@@ -128,50 +124,37 @@ def format_forecast(response: WeatherResponse) -> None:
             f"{day.mintemp_c:.1f} \u00b0C / {day.mintemp_f:.1f} \u00b0F",
         )
         daily_table.add_row(
-            "Avg",
+            "Avg Temp",
             f"{day.avgtemp_c:.1f} \u00b0C / {day.avgtemp_f:.1f} \u00b0F",
         )
-
-        # Humidity
         daily_table.add_row("Avg Humidity", f"{day.avghumidity:.0f}%")
-
-        # Wind
         daily_table.add_row(
             "Max Wind",
             f"{day.maxwind_kph:.1f} kph / {day.maxwind_mph:.1f} mph",
         )
-
-        # Precipitation
-        if day.totalprecip_mm > 0 or day.totalprecip_in > 0:
-            daily_table.add_row(
-                "Precipitation",
-                f"{day.totalprecip_mm:.1f} mm / {day.totalprecip_in:.2f} in",
-            )
-
-        # UV Index
+        daily_table.add_row(
+            "Precipitation",
+            f"{day.totalprecip_mm:.1f} mm / {day.totalprecip_in:.2f} in",
+        )
         daily_table.add_row("UV Index", f"{day.uv}")
-
-        # Rain/Snow chance
         if day.daily_chance_of_rain > 0:
             daily_table.add_row("Chance of Rain", f"{day.daily_chance_of_rain}%")
         if day.daily_chance_of_snow > 0:
             daily_table.add_row("Chance of Snow", f"{day.daily_chance_of_snow}%")
 
-        # Astro data if available
+        # Add astronomical data if available
         if day_forecast.astro:
             astro = day_forecast.astro
-            if astro.sunrise and astro.sunset:
-                daily_table.add_row(
-                    "Sunrise/Sunset",
-                    f"{astro.sunrise} / {astro.sunset}",
-                )
+            if astro.sunrise:
+                daily_table.add_row("Sunrise", astro.sunrise)
+            if astro.sunset:
+                daily_table.add_row("Sunset", astro.sunset)
             if astro.moon_phase:
-                moon_info = astro.moon_phase
+                moon_text = astro.moon_phase
                 if astro.moon_illumination:
-                    moon_info += f" ({astro.moon_illumination}%)"
-                daily_table.add_row("Moon", moon_info)
+                    moon_text = f"{moon_text} ({astro.moon_illumination}%)"
+                daily_table.add_row("Moon", moon_text)
 
-        # Print daily panel
         daily_panel = Panel(
             daily_table,
             title=f"[bold green]{date_str}[/bold green]",
@@ -180,30 +163,30 @@ def format_forecast(response: WeatherResponse) -> None:
         )
         console.print(daily_panel)
 
-        # Build hourly forecast table
+        # Create hourly forecast table if available
         if day_forecast.hour:
             hourly_table = Table(
                 show_header=True,
                 box=None,
                 pad_edge=False,
                 expand=False,
-                header_style="bold magenta",
+                title="[bold]Hourly Breakdown[/bold]",
+                title_style="cyan",
             )
             hourly_table.add_column("Time", style="cyan", no_wrap=True)
-            hourly_table.add_column("Temp", justify="right")
-            hourly_table.add_column("Condition", style="yellow")
-            hourly_table.add_column("Wind", justify="right")
-            hourly_table.add_column("Humid", justify="right")
-            hourly_table.add_column("UV", justify="right")
+            hourly_table.add_column("Temp", style="yellow", justify="right")
+            hourly_table.add_column("Condition", style="white")
+            hourly_table.add_column("Wind", style="blue", justify="right")
+            hourly_table.add_column("Humidity", style="magenta", justify="right")
+            hourly_table.add_column("UV", style="red", justify="right")
 
-            # Show a subset of hourly data (every 3 hours to keep it readable)
-            step = 3
-            for hour in day_forecast.hour[::step]:
-                time_str = hour.time.split()[1] if " " in hour.time else hour.time
+            for hour in day_forecast.hour:
+                # Extract just the time portion (HH:MM)
+                time_str = hour.time.split()[-1] if " " in hour.time else hour.time
                 temp_str = f"{hour.temp_c:.1f}\u00b0C"
                 condition_str = hour.condition.text if hour.condition else ""
                 wind_str = f"{hour.wind_kph:.0f} kph {hour.wind_dir}"
-                humid_str = f"{hour.humidity}%"
+                humidity_str = f"{hour.humidity}%"
                 uv_str = f"{hour.uv}"
 
                 hourly_table.add_row(
@@ -211,16 +194,9 @@ def format_forecast(response: WeatherResponse) -> None:
                     temp_str,
                     condition_str,
                     wind_str,
-                    humid_str,
+                    humidity_str,
                     uv_str,
                 )
 
-            hourly_panel = Panel(
-                hourly_table,
-                title="[bold magenta]Hourly Breakdown (every 3 hours)[/bold magenta]",
-                border_style="magenta",
-                expand=False,
-            )
-            console.print(hourly_panel)
-
-        console.print()
+            console.print(hourly_table)
+            console.print()
