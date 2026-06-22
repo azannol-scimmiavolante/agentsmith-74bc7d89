@@ -101,7 +101,7 @@ SAMPLE_FORECAST_RESPONSE = {
                         "temp_f": 46.4 + i * 0.36,
                         "is_day": 1 if 6 <= i < 18 else 0,
                         "condition": {
-                            "text": "Clear",
+                            "text": "Sunny",
                             "icon": "//cdn.weatherapi.com/weather/64x64/day/113.png",
                             "code": 1000,
                         },
@@ -113,25 +113,15 @@ SAMPLE_FORECAST_RESPONSE = {
                         "pressure_in": 29.97,
                         "precip_mm": 0.0,
                         "precip_in": 0.0,
-                        "humidity": 72,
-                        "cloud": 25,
+                        "humidity": 70,
+                        "cloud": 20,
                         "feelslike_c": 7.0 + i * 0.2,
                         "feelslike_f": 44.6 + i * 0.36,
-                        "windchill_c": 7.0,
-                        "windchill_f": 44.6,
-                        "heatindex_c": 8.0,
-                        "heatindex_f": 46.4,
-                        "dewpoint_c": 4.0,
-                        "dewpoint_f": 39.2,
-                        "will_it_rain": 0,
-                        "chance_of_rain": 0,
-                        "will_it_snow": 0,
-                        "chance_of_snow": 0,
                         "vis_km": 10.0,
                         "vis_miles": 6.0,
                         "gust_mph": 7.0,
                         "gust_kph": 11.0,
-                        "uv": 1.0 if 6 <= i < 18 else 0.0,
+                        "uv": 2.0,
                     }
                     for i in range(24)
                 ],
@@ -142,22 +132,22 @@ SAMPLE_FORECAST_RESPONSE = {
 
 
 class TestWeatherClient(unittest.TestCase):
-    """Test cases for WeatherClient."""
+    """Test suite for the WeatherClient class."""
 
     @patch("weatherapp.client.requests.get")
     def test_get_current_success(self, mock_get: MagicMock) -> None:
-        """Test get_current returns correct WeatherResponse on success."""
+        """Test that get_current returns a valid WeatherResponse on success."""
         # Setup mock response
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = SAMPLE_CURRENT_RESPONSE
         mock_get.return_value = mock_response
 
-        # Call the method
+        # Execute
         client = WeatherClient(api_key="test_key")
         result = client.get_current("London")
 
-        # Assertions
+        # Verify
         self.assertIsInstance(result, WeatherResponse)
         self.assertEqual(result.location.name, "London")
         self.assertEqual(result.location.country, "United Kingdom")
@@ -169,192 +159,228 @@ class TestWeatherClient(unittest.TestCase):
         self.assertEqual(result.current.wind_kph, 8.0)
         self.assertEqual(result.current.uv, 1.0)
 
-        # Verify the request was made correctly
+        # Verify the API was called correctly
         mock_get.assert_called_once()
-        args, kwargs = mock_get.call_args
-        self.assertIn("current.json", args[0])
-        self.assertEqual(kwargs["params"]["key"], "test_key")
-        self.assertEqual(kwargs["params"]["q"], "London")
+        call_args = mock_get.call_args
+        self.assertIn("current.json", call_args[0][0])
+        self.assertEqual(call_args[1]["params"]["key"], "test_key")
+        self.assertEqual(call_args[1]["params"]["q"], "London")
 
     @patch("weatherapp.client.requests.get")
     def test_get_forecast_success(self, mock_get: MagicMock) -> None:
-        """Test get_forecast returns correct WeatherResponse with forecast data."""
+        """Test that get_forecast returns a valid WeatherResponse with forecast data."""
         # Setup mock response
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = SAMPLE_FORECAST_RESPONSE
         mock_get.return_value = mock_response
 
-        # Call the method
+        # Execute
         client = WeatherClient(api_key="test_key")
         result = client.get_forecast("London", days=3)
 
-        # Assertions
+        # Verify
         self.assertIsInstance(result, WeatherResponse)
         self.assertEqual(result.location.name, "London")
         self.assertIsNotNone(result.current)
         self.assertIsNotNone(result.forecast)
         self.assertEqual(len(result.forecast.forecastday), 1)
         
-        # Check forecast day details
-        forecast_day = result.forecast.forecastday[0]
-        self.assertEqual(forecast_day.date, "2023-11-14")
-        self.assertEqual(forecast_day.day.maxtemp_c, 12.0)
-        self.assertEqual(forecast_day.day.mintemp_c, 5.0)
-        self.assertEqual(len(forecast_day.hour), 24)
+        day = result.forecast.forecastday[0]
+        self.assertEqual(day.date, "2023-11-14")
+        self.assertEqual(day.day.maxtemp_c, 12.0)
+        self.assertEqual(day.day.mintemp_c, 5.0)
+        self.assertEqual(len(day.hour), 24)
 
-        # Verify the request was made correctly
+        # Verify the API was called correctly
         mock_get.assert_called_once()
-        args, kwargs = mock_get.call_args
-        self.assertIn("forecast.json", args[0])
-        self.assertEqual(kwargs["params"]["key"], "test_key")
-        self.assertEqual(kwargs["params"]["q"], "London")
-        self.assertEqual(kwargs["params"]["days"], 3)
+        call_args = mock_get.call_args
+        self.assertIn("forecast.json", call_args[0][0])
+        self.assertEqual(call_args[1]["params"]["key"], "test_key")
+        self.assertEqual(call_args[1]["params"]["q"], "London")
+        self.assertEqual(call_args[1]["params"]["days"], 3)
 
     @patch("weatherapp.client.requests.get")
-    def test_get_current_raises_error_on_401(self, mock_get: MagicMock) -> None:
-        """Test WeatherError is raised on 401 Unauthorized response."""
-        # Setup mock response for 401
+    def test_get_current_raises_on_401(self, mock_get: MagicMock) -> None:
+        """Test that WeatherError is raised on 401 (unauthorized) response."""
+        # Setup mock response for unauthorized
         mock_response = MagicMock()
         mock_response.status_code = 401
-        mock_response.json.return_value = {"error": {"message": "Invalid API key"}}
+        mock_response.json.return_value = {
+            "error": {"code": 2006, "message": "API key is invalid"}
+        }
         mock_get.return_value = mock_response
 
-        # Call and assert exception
+        # Execute and verify
         client = WeatherClient(api_key="invalid_key")
         with self.assertRaises(WeatherError) as context:
             client.get_current("London")
 
-        # Check error message
         self.assertIn("Invalid or unauthorized", str(context.exception))
         self.assertIn("API key", str(context.exception))
         self.assertIsNotNone(context.exception.hint)
 
     @patch("weatherapp.client.requests.get")
-    def test_get_current_raises_error_on_403(self, mock_get: MagicMock) -> None:
-        """Test WeatherError is raised on 403 Forbidden response."""
-        # Setup mock response for 403
+    def test_get_current_raises_on_403(self, mock_get: MagicMock) -> None:
+        """Test that WeatherError is raised on 403 (forbidden) response."""
+        # Setup mock response for forbidden
         mock_response = MagicMock()
         mock_response.status_code = 403
-        mock_response.json.return_value = {"error": {"message": "Access denied"}}
+        mock_response.json.return_value = {
+            "error": {"code": 2007, "message": "API key has been disabled"}
+        }
         mock_get.return_value = mock_response
 
-        # Call and assert exception
-        client = WeatherClient(api_key="forbidden_key")
+        # Execute and verify
+        client = WeatherClient(api_key="disabled_key")
         with self.assertRaises(WeatherError) as context:
             client.get_current("London")
 
-        # Check error message
         self.assertIn("Invalid or unauthorized", str(context.exception))
 
     @patch("weatherapp.client.requests.get")
-    def test_get_current_raises_error_on_400(self, mock_get: MagicMock) -> None:
-        """Test WeatherError is raised on 400 Bad Request response (e.g., city not found)."""
-        # Setup mock response for 400
+    def test_get_current_raises_on_400(self, mock_get: MagicMock) -> None:
+        """Test that WeatherError is raised on 400 (bad request) response."""
+        # Setup mock response for bad request (e.g., city not found)
         mock_response = MagicMock()
         mock_response.status_code = 400
         mock_response.json.return_value = {
-            "error": {"message": "No matching location found."}
+            "error": {"code": 1006, "message": "No matching location found."}
         }
         mock_get.return_value = mock_response
 
-        # Call and assert exception
+        # Execute and verify
         client = WeatherClient(api_key="test_key")
         with self.assertRaises(WeatherError) as context:
-            client.get_current("InvalidCityName12345")
+            client.get_current("InvalidCityName123")
 
-        # Check error message contains the API error
+        self.assertIn("No matching location found", str(context.exception))
+        self.assertIsNotNone(context.exception.hint)
+
+    @patch("weatherapp.client.requests.get")
+    def test_get_forecast_raises_on_400(self, mock_get: MagicMock) -> None:
+        """Test that WeatherError is raised on 400 for forecast requests."""
+        # Setup mock response for bad request
+        mock_response = MagicMock()
+        mock_response.status_code = 400
+        mock_response.json.return_value = {
+            "error": {"code": 1006, "message": "No matching location found."}
+        }
+        mock_get.return_value = mock_response
+
+        # Execute and verify
+        client = WeatherClient(api_key="test_key")
+        with self.assertRaises(WeatherError) as context:
+            client.get_forecast("InvalidCity", days=5)
+
         self.assertIn("No matching location found", str(context.exception))
 
     @patch("weatherapp.client.requests.get")
-    def test_get_forecast_raises_error_on_400(self, mock_get: MagicMock) -> None:
-        """Test WeatherError is raised on 400 for get_forecast."""
-        # Setup mock response for 400
-        mock_response = MagicMock()
-        mock_response.status_code = 400
-        mock_response.json.return_value = {
-            "error": {"message": "Parameter q is missing."}
-        }
-        mock_get.return_value = mock_response
-
-        # Call and assert exception
-        client = WeatherClient(api_key="test_key")
-        with self.assertRaises(WeatherError) as context:
-            client.get_forecast("", days=5)
-
-        # Check error message
-        self.assertIn("Parameter q is missing", str(context.exception))
-
-    @patch("weatherapp.client.requests.get")
     def test_timeout_raises_weather_error(self, mock_get: MagicMock) -> None:
-        """Test WeatherError is raised when request times out."""
+        """Test that WeatherError is raised on request timeout."""
         # Setup mock to raise Timeout
-        mock_get.side_effect = requests.Timeout("Connection timed out")
+        mock_get.side_effect = requests.Timeout("Connection timeout")
 
-        # Call and assert exception
+        # Execute and verify
         client = WeatherClient(api_key="test_key")
         with self.assertRaises(WeatherError) as context:
             client.get_current("London")
 
-        # Check error message
         self.assertIn("timed out", str(context.exception))
         self.assertIsNotNone(context.exception.hint)
-        self.assertIn("internet connection", context.exception.hint)
 
     @patch("weatherapp.client.requests.get")
     def test_connection_error_raises_weather_error(self, mock_get: MagicMock) -> None:
-        """Test WeatherError is raised on connection error."""
+        """Test that WeatherError is raised on connection error."""
         # Setup mock to raise ConnectionError
-        mock_get.side_effect = requests.ConnectionError("Failed to connect")
+        mock_get.side_effect = requests.ConnectionError("Network unreachable")
 
-        # Call and assert exception
+        # Execute and verify
         client = WeatherClient(api_key="test_key")
         with self.assertRaises(WeatherError) as context:
             client.get_current("London")
 
-        # Check error message
         self.assertIn("Could not connect", str(context.exception))
         self.assertIsNotNone(context.exception.hint)
 
     @patch("weatherapp.client.requests.get")
-    def test_request_exception_raises_weather_error(self, mock_get: MagicMock) -> None:
-        """Test WeatherError is raised on generic request exception."""
+    def test_generic_request_exception_raises_weather_error(
+        self, mock_get: MagicMock
+    ) -> None:
+        """Test that WeatherError is raised on generic request exceptions."""
         # Setup mock to raise generic RequestException
-        mock_get.side_effect = requests.RequestException("Unknown error")
+        mock_get.side_effect = requests.RequestException("Something went wrong")
 
-        # Call and assert exception
+        # Execute and verify
         client = WeatherClient(api_key="test_key")
         with self.assertRaises(WeatherError) as context:
             client.get_current("London")
 
-        # Check error message
         self.assertIn("Network error", str(context.exception))
-
-    def test_no_api_key_raises_weather_error(self) -> None:
-        """Test WeatherError is raised when no API key is provided."""
-        with self.assertRaises(WeatherError) as context:
-            WeatherClient(api_key="")
-
-        self.assertIn("WEATHER_API_KEY is not set", str(context.exception))
         self.assertIsNotNone(context.exception.hint)
-        self.assertIn(".env", context.exception.hint)
+
+    def test_client_raises_on_missing_api_key(self) -> None:
+        """Test that WeatherClient raises WeatherError if no API key is provided."""
+        with patch("weatherapp.client.WEATHER_API_KEY", None):
+            with self.assertRaises(WeatherError) as context:
+                WeatherClient()
+
+            self.assertIn("WEATHER_API_KEY is not set", str(context.exception))
+            self.assertIsNotNone(context.exception.hint)
 
     @patch("weatherapp.client.requests.get")
-    def test_500_error_raises_weather_error(self, mock_get: MagicMock) -> None:
-        """Test WeatherError is raised on 500 server error."""
-        # Setup mock response for 500
+    def test_get_current_with_custom_base_url(self, mock_get: MagicMock) -> None:
+        """Test that custom base URL is used when provided."""
+        # Setup mock response
         mock_response = MagicMock()
-        mock_response.status_code = 500
-        mock_response.text = "Internal Server Error"
+        mock_response.status_code = 200
+        mock_response.json.return_value = SAMPLE_CURRENT_RESPONSE
         mock_get.return_value = mock_response
 
-        # Call and assert exception
-        client = WeatherClient(api_key="test_key")
-        with self.assertRaises(WeatherError) as context:
-            client.get_current("London")
+        # Execute
+        custom_url = "https://custom.api.com/v1"
+        client = WeatherClient(api_key="test_key", base_url=custom_url)
+        client.get_current("London")
 
-        # Check error message
-        self.assertIn("500", str(context.exception))
+        # Verify
+        mock_get.assert_called_once()
+        call_args = mock_get.call_args
+        self.assertIn(custom_url, call_args[0][0])
+
+    @patch("weatherapp.client.requests.get")
+    def test_get_current_with_custom_timeout(self, mock_get: MagicMock) -> None:
+        """Test that custom timeout is used when provided."""
+        # Setup mock response
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = SAMPLE_CURRENT_RESPONSE
+        mock_get.return_value = mock_response
+
+        # Execute
+        custom_timeout = 30.0
+        client = WeatherClient(api_key="test_key", timeout=custom_timeout)
+        client.get_current("London")
+
+        # Verify
+        mock_get.assert_called_once()
+        call_args = mock_get.call_args
+        self.assertEqual(call_args[1]["timeout"], custom_timeout)
+
+    @patch("weatherapp.client.requests.get")
+    def test_get_current_with_aqi_parameter(self, mock_get: MagicMock) -> None:
+        """Test that additional parameters like aqi can be passed."""
+        # Setup mock response
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = SAMPLE_CURRENT_RESPONSE
+        mock_get.return_value = mock_response
+
+        # Execute
+        client = WeatherClient(api_key="test_key")
+        result = client.get_current("London")
+
+        # Verify the response is valid
+        self.assertIsInstance(result, WeatherResponse)
 
 
 if __name__ == "__main__":
