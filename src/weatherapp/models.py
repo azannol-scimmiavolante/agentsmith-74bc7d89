@@ -140,13 +140,17 @@ class DailyForecast(BaseModel):
 
 
 class Forecast(BaseModel):
-    """Forecast container with multiple days."""
+    """Container for forecast days."""
 
     forecastday: list[DailyForecast]
 
 
 class WeatherResponse(BaseModel):
-    """Root response from weatherapi.com containing location, current, and forecast."""
+    """Top-level response from weatherapi.com.
+    
+    Can contain current conditions, forecast data, or both depending on
+    which endpoint was called (current.json vs forecast.json).
+    """
 
     location: Location
     current: Optional[CurrentCondition] = None
