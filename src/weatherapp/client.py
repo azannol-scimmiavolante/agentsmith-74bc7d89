@@ -84,35 +84,33 @@ class WeatherClient:
         if response.status_code == 400:
             api_message = ""
             try:
-                error_body = response.json()
-                if "error" in error_body and "message" in error_body["error"]:
-                    api_message = error_body["error"]["message"]
+                error_data = response.json()
+                if "error" in error_data and "message" in error_data["error"]:
+                    api_message = error_data["error"]["message"]
             except Exception:
                 pass
             
+            message = "Bad request to the weather service."
             if api_message:
-                raise WeatherError(
-                    f"Bad request: {api_message}",
-                    hint='Check the city spelling or try a more specific name (e.g., "Paris, FR").',
-                )
-            else:
-                raise WeatherError(
-                    "City not found or invalid request.",
-                    hint='Check the city spelling or try a more specific name (e.g., "Paris, FR").',
-                )
+                message = f"Bad request: {api_message}"
+            
+            raise WeatherError(
+                message,
+                hint="Check the city name spelling or try a more specific location (e.g., 'Paris, FR').",
+            )
 
-        # Handle other error status codes
+        # Handle other HTTP errors
         if not response.ok:
             raise WeatherError(
-                f"Weather API returned status {response.status_code}.",
-                hint="Try again in a few moments or check the weatherapi.com status.",
+                f"Weather service returned status {response.status_code}.",
+                hint="The service may be temporarily unavailable. Try again later.",
             )
 
         try:
             return response.json()
         except ValueError as exc:
             raise WeatherError(
-                "Failed to parse weather API response.",
+                "Received invalid JSON from the weather service.",
                 hint="The service may be experiencing issues. Try again later.",
             ) from exc
 
@@ -120,10 +118,10 @@ class WeatherClient:
         """Fetch current weather conditions for a city.
 
         Args:
-            city: City name or location query (e.g., 'London' or 'Paris, FR')
+            city: The city name (e.g., 'London', 'New York', 'Tokyo')
 
         Returns:
-            A WeatherResponse containing current conditions
+            A WeatherResponse with current conditions
 
         Raises:
             WeatherError: If the request fails or the city is not found
@@ -132,17 +130,20 @@ class WeatherClient:
         return WeatherResponse(**data)
 
     def get_forecast(self, city: str, days: int = 5) -> WeatherResponse:
-        """Fetch a multi-day forecast for a city.
+        """Fetch weather forecast for a city.
 
         Args:
-            city: City name or location query (e.g., 'London' or 'Paris, FR')
-            days: Number of forecast days (1-7)
+            city: The city name (e.g., 'London', 'New York', 'Tokyo')
+            days: Number of days to forecast (1-7)
 
         Returns:
-            A WeatherResponse containing forecast data
+            A WeatherResponse with forecast data
 
         Raises:
             WeatherError: If the request fails or the city is not found
         """
-        data = self._request("forecast.json", {"q": city, "days": days, "aqi": "no"})
+        data = self._request(
+            "forecast.json",
+            {"q": city, "days": days, "aqi": "no", "alerts": "no"},
+        )
         return WeatherResponse(**data)
